@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.thomsonreuters.elektron.eta.apps</groupId>
+        <artifactId>parent</artifactId>
+        <version>3.0.3.L2-SNAPSHOT</version>
+    </parent>
+    
+    <artifactId>xpp3</artifactId>
+    <packaging>pom</packaging>
+    <name>Thomson Reuters ETA - Applications - XPP3 Provider</name>
+    
+    <description>Provides XPP3 Lib which is used by PerfTools</description>
+    
+    <!-- XPP3 v1.1.3_8 is not found in Maven Central, so provided by
+         by this module instead.                                            -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <version>2.5.2</version>
+                <executions>
+                    <execution>
+                        <id>jar-xpp3</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                            <groupId>org.xmlpull</groupId>
+                            <artifactId>xpp3</artifactId>
+                            <version>1.1.3_8</version>
+                            <packaging>jar</packaging>
+                            <file>${basedir}/libs/xpp3-1.1.3_8.jar</file>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jar-xpp3-mini</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                            <groupId>org.xmlpull</groupId>
+                            <artifactId>xpp3_min</artifactId>
+                            <version>1.1.3_8</version>
+                            <packaging>jar</packaging>
+                            <file>${basedir}/libs/xpp3_min-1.1.3_8.jar</file>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
