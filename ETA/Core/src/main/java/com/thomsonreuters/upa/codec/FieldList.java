@@ -38,6 +38,7 @@ import com.thomsonreuters.upa.codec.Buffer;
  * 
  * <pre>
  * 
+ * 
  * FieldList fieldList = CodecFactory.createFieldList();
  * 
  * // create a single FieldEntry and reuse for each entry

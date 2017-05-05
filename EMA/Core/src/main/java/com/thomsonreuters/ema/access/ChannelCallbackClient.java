@@ -45,12 +45,8 @@ class ChannelInfo
 	private String				_name;
 	private StringBuilder		_toString;
 	private boolean				_toStringSet;
-	private int					_nextStreamId;
-	private int                 _nextProviderStreamId;
 	private Reactor				_rsslReactor;
 	private ReactorChannel		_rsslReactorChannel;		
-	private List<Integer>		_reusedStreamIds;
-	private List<Integer>		_reusedProviderStreamIds;
 	protected int _majorVersion;
 	protected int _minorVersion;
 	protected DataDictionary		_rsslDictionary;
@@ -59,18 +55,12 @@ class ChannelInfo
 	
 	ChannelInfo(String name, Reactor rsslReactor)
 	{
-		_nextStreamId = 4;
-		_nextProviderStreamId = 0;		
 		_name = name;
 		_rsslReactor = rsslReactor;
-		_reusedStreamIds = new ArrayList<Integer>();
-		_reusedProviderStreamIds = new ArrayList<Integer>();
 	}
 
 	ChannelInfo reset(String name, Reactor rsslReactor)
 	{
-		_nextStreamId = 4;
-		_nextProviderStreamId = 0;
 		_name = name;
 		_rsslReactor = rsslReactor;
 		_toStringSet = false;
@@ -111,51 +101,6 @@ class ChannelInfo
 		return this;
 	}
 
-	int nextStreamId(int numOfItem)
-	{
-		if ( numOfItem > 0 )
-		{
-			int retVal = ++_nextStreamId;
-			_nextStreamId += numOfItem;
-			return retVal;
-		}
-
-		if ( _reusedStreamIds.size() == 0 ) 
-			return ++_nextStreamId;
-		else
-		{
-			Integer streamId = _reusedStreamIds.remove(0);
-			if (streamId != null)
-				return streamId.intValue();
-			else
-				return ++_nextStreamId;
-		}
-		
-	}
-	
-	int nextProviderStreamId()
-	{		
-		if ( _reusedProviderStreamIds.size() == 0 ) 
-			return --_nextProviderStreamId;
-		else
-		{
-			Integer streamId = _reusedProviderStreamIds.remove(0);
-			if (streamId != null)
-				return streamId.intValue();
-			else
-				return --_nextProviderStreamId;
-		}				
-	}
-			
-	void returnStreamId(int streamId)
-	{ 
-		if (streamId < 0) 
-			_reusedProviderStreamIds.add((Integer)(streamId));
-		else	
-			_reusedStreamIds.add((Integer)(streamId));				
-	}
-
-
 	@Override
 	public String toString()
 	{
@@ -163,7 +108,7 @@ class ChannelInfo
 		{
 			_toStringSet = true;
 			if (_toString == null)
-				_toString = new StringBuilder();
+				_toString = new StringBuilder(1024);
 			else
 				_toString.setLength(0);
 			
@@ -189,10 +134,9 @@ class ChannelCallbackClient<T> implements ReactorChannelEventCallback
 	private Reactor						_rsslReactor;
 	private ReactorConnectOptions 		_rsslReactorConnOptions = ReactorFactory.createReactorConnectOptions();
 	private ReactorRole 				_rsslReactorRole = null;
-	private boolean 					_bInitialChannelReadyEventReceived;
+	private boolean						_bInitialChannelReadyEventReceived;
     Package 							_package = Package.getPackage("com.thomsonreuters.ema.access");
 	String 								_productVersion;
-
 	
 	ChannelCallbackClient(OmmBaseImpl<T> baseImpl, Reactor rsslReactor)
 	{
@@ -359,11 +303,24 @@ class ChannelCallbackClient<T> implements ReactorChannelEventCallback
 
 				if (_baseImpl.loggerClient().isInfoEnabled())
 				{
+					int count = reactorChannelInfo.channelInfo().componentInfo().size();
+					
 					StringBuilder temp = _baseImpl.strBuilder();
     	        	temp.append("Received ChannelUp event on channel ");
 					temp.append(chnlInfo.name()).append(OmmLoggerClient.CR)
-						.append("Instance Name ").append(_baseImpl.instanceName()).append(OmmLoggerClient.CR)
-						.append("Component Version ").append(reactorChannelInfo.channelInfo().componentInfo().get(0).componentVersion().toString());
+						.append("Instance Name ").append(_baseImpl.instanceName());
+						
+						if ( count != 0 )
+						{
+							temp.append(OmmLoggerClient.CR).append("Component Version ");
+							for (int i = 0; i < count; ++i)
+							{
+								temp.append(reactorChannelInfo.channelInfo().componentInfo().get(i).componentVersion());
+								if (i < count - 1)
+									temp.append(", ");
+							}
+						}
+					
 					_baseImpl.loggerClient().info(_baseImpl.formatLogMessage(ChannelCallbackClient.CLIENT_NAME, temp.toString(), Severity.INFO));
 				}
 	
@@ -610,10 +567,10 @@ class ChannelCallbackClient<T> implements ReactorChannelEventCallback
 		}
 	}
 	
-	private String channelParametersToString( ChannelConfig channelCfg )
+	private String channelParametersToString(ActiveConfig activeConfig,  ChannelConfig channelCfg )
 	{
 		boolean bValidChType = true;
-		StringBuilder cfgParameters = new StringBuilder();
+		StringBuilder cfgParameters = new StringBuilder(512);
 		String compType;
 		String strConnectionType;
 		switch (channelCfg.compressionType)
@@ -694,9 +651,9 @@ class ChannelCallbackClient<T> implements ReactorChannelEventCallback
 			tempBlder.append("RsslReactor ").append("@").append(Integer.toHexString(_rsslReactor.hashCode())).append(OmmLoggerClient.CR)
 			.append( "InterfaceName " ).append( channelCfg.interfaceName ).append( OmmLoggerClient.CR )
 			.append( cfgParameters )
-			.append( "reconnectAttemptLimit " ).append( channelCfg.reconnectAttemptLimit ).append( OmmLoggerClient.CR )
-			.append( "reconnectMinDelay " ).append( channelCfg.reconnectMinDelay ).append( " msec" ).append( OmmLoggerClient.CR )
-			.append( "reconnectMaxDelay " ).append( channelCfg.reconnectMaxDelay ).append( " msec" ).append( OmmLoggerClient.CR )
+			.append( "reconnectAttemptLimit " ).append( activeConfig.reconnectAttemptLimit ).append( OmmLoggerClient.CR )
+			.append( "reconnectMinDelay " ).append( activeConfig.reconnectMinDelay ).append( " msec" ).append( OmmLoggerClient.CR )
+			.append( "reconnectMaxDelay " ).append( activeConfig.reconnectMaxDelay ).append( " msec" ).append( OmmLoggerClient.CR )
 			.append( "guaranteedOutputBuffers " ).append( channelCfg.guaranteedOutputBuffers ).append( OmmLoggerClient.CR )
 			.append( "numInputBuffers " ).append( channelCfg.numInputBuffers ).append( OmmLoggerClient.CR )
 			.append( "sysRecvBufSize " ).append( channelCfg.sysRecvBufSize ).append( OmmLoggerClient.CR )
@@ -727,9 +684,9 @@ class ChannelCallbackClient<T> implements ReactorChannelEventCallback
 		errorStrUnsupportedConnectionType.append( "Unsupported connection type. Passed in type is ");
 
 		
-		_rsslReactorConnOptions.reconnectAttemptLimit(activeConfigChannelSet.get(channelCfgSetLastIndex).reconnectAttemptLimit);
-		_rsslReactorConnOptions.reconnectMinDelay(activeConfigChannelSet.get(channelCfgSetLastIndex).reconnectMinDelay);
-		_rsslReactorConnOptions.reconnectMaxDelay(activeConfigChannelSet.get(channelCfgSetLastIndex).reconnectMaxDelay);
+		_rsslReactorConnOptions.reconnectAttemptLimit(activeConfig.reconnectAttemptLimit);
+		_rsslReactorConnOptions.reconnectMinDelay(activeConfig.reconnectMinDelay);
+		_rsslReactorConnOptions.reconnectMaxDelay(activeConfig.reconnectMaxDelay);
 		com.thomsonreuters.upa.transport.ConnectOptions connectOptions = null;
 		
 		for(int i = 0; i < activeConfigChannelSet.size(); i++)
@@ -833,19 +790,10 @@ class ChannelCallbackClient<T> implements ReactorChannelEventCallback
 				connectOptions.unifiedNetworkInfo().interfaceName( channelConfig.interfaceName);
 				connectOptions.unifiedNetworkInfo().unicastServiceName("");
 				channelNames.concat(channelConfig.name);
-				if( i < channelCfgSetLastIndex )
-				{
-					channelNames.concat( ", " );
-					activeConfigChannelSet.get(i).reconnectAttemptLimit = _rsslReactorConnOptions.reconnectAttemptLimit();
-					activeConfigChannelSet.get(i).reconnectMaxDelay = _rsslReactorConnOptions.reconnectMaxDelay();
-					activeConfigChannelSet.get(i).reconnectMinDelay = _rsslReactorConnOptions.reconnectMinDelay();
-					activeConfigChannelSet.get(i).xmlTraceEnable = activeConfigChannelSet.get(channelCfgSetLastIndex).xmlTraceEnable;
-					activeConfigChannelSet.get(i).msgKeyInUpdates = activeConfigChannelSet.get(channelCfgSetLastIndex).msgKeyInUpdates;
-				
-				}
+
 				if (_baseImpl.loggerClient().isTraceEnabled())
 				{
-					channelParams = channelParametersToString( activeConfigChannelSet.get( i ) );
+					channelParams = channelParametersToString( activeConfig, activeConfigChannelSet.get( i ) );
 					temp.append( OmmLoggerClient.CR ).append( i + 1 ).append( "] " ).append( channelParams );
 					if ( i == ( channelCfgSetLastIndex ) )				
 						_baseImpl.loggerClient().trace(_baseImpl.formatLogMessage(CLIENT_NAME, temp.toString(), Severity.TRACE));

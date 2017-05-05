@@ -38,8 +38,7 @@ class WlLoginHandler implements WlHandler
 	LoginRequest _loginRequest;
 	LoginRequest _tempLoginRequest;
 	ReactorErrorInfo _errorInfo = ReactorFactory.createReactorErrorInfo();
-	ReactorSubmitOptions _submitOptions = ReactorFactory
-			.createReactorSubmitOptions();
+	ReactorSubmitOptions _submitOptions = ReactorFactory.createReactorSubmitOptions();
 	Msg _tempMsg = CodecFactory.createMsg();
 	LoginRefresh _loginRefresh;
 	LoginStatus _loginStatus;
@@ -47,6 +46,7 @@ class WlLoginHandler implements WlHandler
 	Buffer _tempBuffer;
 	boolean _awaitingResumeAll;
 	boolean _userloginStreamOpen;
+	int _requestCount; // tracks pending requests so re-issues aren't sent until refresh is received
 
 	WlInteger _tempWlInteger = ReactorFactory.createWlInteger();
 
@@ -158,15 +158,25 @@ class WlLoginHandler implements WlHandler
 			}
 		}
 
-		// send message
-		if ((ret = _stream.sendMsg(requestMsg, submitOptions, errorInfo)) < ReactorReturnCodes.SUCCESS) 
+		// send message if request not pending
+		if (_requestCount == 0)
 		{
-			if (!isReissue) {
-				_loginRequest = null;
-				_stream.returnToPool();
-				_stream = null;
+			if(_stream.isChannelUp())
+			{
+				if ((ret = _stream.sendMsg(requestMsg, submitOptions, errorInfo)) < ReactorReturnCodes.SUCCESS) 
+				{
+					if (!isReissue) {
+						_loginRequest = null;
+						_stream.returnToPool();
+						_stream = null;
+					}
+					return ret;
+				}
 			}
-			return ret;
+		}
+		if (!requestMsg.checkNoRefresh() && _stream.isChannelUp())
+		{
+			_requestCount++;
 		}
 
 		// save stream info
@@ -333,7 +343,7 @@ class WlLoginHandler implements WlHandler
 		else // not pause
 		{
 			// handle resume
-			if (_awaitingResumeAll)
+			if (_awaitingResumeAll && !isTokenChange(loginRequest))
 			{
 				_awaitingResumeAll = false;
 
@@ -361,6 +371,7 @@ class WlLoginHandler implements WlHandler
 			if (_loginRequest.checkHasUserNameType()
 					&& (loginRequest.userNameType() != _loginRequest.userNameType() 
 					|| (_loginRequest.userNameType() != Login.UserIdTypes.TOKEN  
+					&& _loginRequest.userNameType() != Login.UserIdTypes.AUTHN_TOKEN
 					    && !_loginRequest.userName().equals(loginRequest.userName()))))
 			{
 				return _watchlist.reactor().populateErrorInfo(errorInfo,
@@ -600,7 +611,14 @@ class WlLoginHandler implements WlHandler
 		return ReactorReturnCodes.SUCCESS;
 	}
 
-	@Override
+	/* Determines if there is a token change. */
+    boolean isTokenChange(LoginRequest loginRequest)
+    {
+        return (loginRequest.userNameType() == Login.UserIdTypes.TOKEN || loginRequest.userNameType() == Login.UserIdTypes.AUTHN_TOKEN) &&
+                (!loginRequest.userName().equals(_loginRequest.userName()) || !loginRequest.authenticationExtended().equals(_loginRequest.authenticationExtended()));
+    }
+
+    @Override
 	public int readMsg(WlStream wlStream, DecodeIterator dIter, Msg msg, ReactorErrorInfo errorInfo)
 	{
 		assert (_stream == wlStream);
@@ -703,6 +721,8 @@ class WlLoginHandler implements WlHandler
 	/* Reads a refresh message. */
 	int readRefreshMsg(WlStream wlStream, DecodeIterator dIter, Msg msg, ReactorErrorInfo errorInfo)
 	{
+		int ret;
+		
 		// make sure refresh complete flag is set
 		// login handler doesn't handle multi-part login refreshes
 		if (!((RefreshMsg) msg).checkRefreshComplete()) 
@@ -751,8 +771,32 @@ class WlLoginHandler implements WlHandler
 
 		// call back user
         _tempWlInteger.value(msg.streamId());
-		return callbackUser("WlLoginHandler.readRefreshMsg", msg,
+		ret = callbackUser("WlLoginHandler.readRefreshMsg", msg,
 				_loginRefresh, _watchlist.streamIdtoWlRequestTable().get(_tempWlInteger), errorInfo);
+		
+		// send pending request if necessary
+		if (_requestCount > 0)
+		{
+			_requestCount--;
+		}
+		if (_requestCount > 0 && ret != ReactorCallbackReturnCodes.FAILURE)
+		{
+			_tempMsg.clear();
+			_watchlist.convertRDMToCodecMsg(_loginRequest, _tempMsg);
+			if ((ret = wlStream.sendMsg(_tempMsg, _submitOptions, errorInfo)) == ReactorReturnCodes.SUCCESS)
+			{
+				if (!_loginRequest.checkNoRefresh())
+				{
+					_requestCount = 1;
+				}
+				else
+				{
+					_requestCount = 0;
+				}
+			}
+		}
+		
+		return ret;
 	}
 
 	/* Reads a status message. */
@@ -1093,6 +1137,8 @@ class WlLoginHandler implements WlHandler
 					_watchlist.streamIdtoWlStreamTable()
 							.put(wlInteger, _stream);
 				}
+
+				_requestCount = 1;
 			} 
 			else // sendMsg failed
 			{
@@ -1165,5 +1211,6 @@ class WlLoginHandler implements WlHandler
 		_tempMsg.clear();
 		_errorInfo.clear();
 		_awaitingResumeAll = false;
+		_requestCount = 0;
 	}
 }

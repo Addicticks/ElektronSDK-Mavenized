@@ -39,6 +39,9 @@ public class LoginHandler
     // For requests
     private String userName;
     private String applicationName;
+	private String authenticationToken;
+	private String authenticationExtended;
+	private String applicationId;
 
     private int role = Login.RoleTypes.CONS;
 
@@ -49,7 +52,6 @@ public class LoginHandler
     private LoginStatus loginStatus = (LoginStatus)LoginMsgFactory.createMsg();
  
     private EncodeIterator encIter = CodecFactory.createEncodeIterator();
-
 
     public LoginHandler()
     {
@@ -89,6 +91,36 @@ public class LoginHandler
     public void userName(String userName)
     {
         this.userName = userName;
+    }
+
+    /**
+     * Sets the authentication token requested by the application.
+     * 
+     * @param authenticationToken
+     */
+    public void authenticationToken(String authenticationToken)
+    {
+        this.authenticationToken = authenticationToken;
+    }
+
+    /**
+     * Sets the authentication extended information requested by the application.
+     * 
+     * @param authenticationExtended
+     */
+    public void authenticationExtended(String authenticationExtended)
+    {
+        this.authenticationExtended = authenticationExtended;
+    }
+
+    /**
+     * Sets the application id for the request.
+     * 
+     * @param applicationId
+     */
+    public void applicationId(String applicationId)
+    {
+        this.applicationId = applicationId;
     }
 
     /**
@@ -136,6 +168,26 @@ public class LoginHandler
         if (userName != null && !userName.isEmpty())
         {
             loginRequest.userName().data(userName);
+        }
+        
+        if (authenticationToken != null && !authenticationToken.isEmpty())
+        {
+        	loginRequest.applyHasUserNameType();
+        	loginRequest.userNameType(Login.UserIdTypes.AUTHN_TOKEN);
+        	loginRequest.userName().data(authenticationToken);
+        	
+	        if (authenticationExtended != null && !authenticationExtended.isEmpty())
+	        {
+	        	loginRequest.applyHasAuthenticationExtended();
+	        	loginRequest.authenticationExtended().data(authenticationExtended);
+	        }
+        }
+
+        if (applicationId != null && !applicationId.isEmpty())
+        {
+            loginRequest.applyHasAttrib();
+            loginRequest.attrib().applyHasApplicationId();
+            loginRequest.attrib().applicationId().data(applicationId);
         }
 
         if (applicationName != null && !applicationName.isEmpty())

@@ -92,6 +92,7 @@ import com.thomsonreuters.upa.valueadd.domainrep.rdm.directory.Service;
  * [-runtime runTime]  [-proxy true or false] [-ph proxy server hostName]
  * [-pp proxy port number] [-plogin proxy userName] [-ppasswd proxy password]
  * [-pdomain proxy domain] [-krbfile proxyKRBFile] [-keyfile keystoreFile] [-keypasswd keystore password]
+ * [-at authenticationToken] [-ax authenticationExtended] [-aid applicationId]
  *   
  * <p>
  * <ul>
@@ -154,6 +155,9 @@ import com.thomsonreuters.upa.valueadd.domainrep.rdm.directory.Service;
  * <li>-krbfile Proxy KRB file. 
  * <li>-keyfile keystore file for encryption.
  * <li>-keypasswd keystore password for encryption.
+ * <li>-at Specifies the Authentication Token. If this is present, the login user name type will be Login.UserIdTypes.AUTHN_TOKEN.
+ * <li>-ax Specifies the Authentication Extended information.
+ * <li>-aid Specifies the Application ID.
  * 
  * </ul>
  * 
@@ -312,6 +316,7 @@ public class Consumer implements ResponseCallback
             loginHandler.role(Login.RoleTypes.CONS);
 
             // Send login request message
+            channelSession.isLoginReissue = false;
             if (loginHandler.sendRequest(channelSession, error) != CodecReturnCodes.SUCCESS)
             {
             	System.err.println("Error sending Login request, exit.");
@@ -408,6 +413,22 @@ public class Consumer implements ResponseCallback
             }
 
             handlePosting();
+
+	        // send login reissue if login reissue time has passed
+    		if (channelSession.canSendLoginReissue &&
+        		System.currentTimeMillis() >= channelSession.loginReissueTime)
+    		{
+	        	channelSession.isLoginReissue = true;
+				if (loginHandler.sendRequest(channelSession, error) !=  CodecReturnCodes.SUCCESS)
+				{
+					System.out.println("Login reissue failed. Error: " + error.text());
+				}
+				else
+				{
+					System.out.println("Login reissue sent");
+				}
+				channelSession.canSendLoginReissue = false;
+	        }
         }
     }
 
@@ -525,6 +546,9 @@ public class Consumer implements ResponseCallback
         }
                        
         loginHandler.userName(CommandLine.value("uname"));
+        loginHandler.authenticationToken(CommandLine.value("at"));
+        loginHandler.authenticationExtended(CommandLine.value("ax"));
+        loginHandler.applicationId(CommandLine.value("aid"));
 
         // set service name in directory handler
         srcDirHandler.serviceName(CommandLine.value("s"));
@@ -1150,6 +1174,8 @@ public class Consumer implements ResponseCallback
         ConsumerLoginState loginState = loginHandler.loginState();
         if (loginState == ConsumerLoginState.OK_SOLICITED)
         {
+        	if (!chnl.isLoginReissue)
+        	{
             ret = srcDirHandler.sendRequest(chnl, error);
             if (ret != CodecReturnCodes.SUCCESS)
             {
@@ -1158,6 +1184,7 @@ public class Consumer implements ResponseCallback
             	System.out.println("Consumer exits...");
                 System.exit(TransportReturnCodes.FAILURE);
             }
+        }
         }
         else if (loginState == ConsumerLoginState.CLOSED)
         {
@@ -1196,6 +1223,8 @@ public class Consumer implements ResponseCallback
                     System.exit(TransportReturnCodes.FAILURE);
                 }
 
+            	if (!chnl.isLoginReissue)
+            	{
                 ret = srcDirHandler.sendRequest(chnl, error);
                 if (ret != CodecReturnCodes.SUCCESS)
                 {
@@ -1205,8 +1234,17 @@ public class Consumer implements ResponseCallback
                     System.exit(TransportReturnCodes.FAILURE);
                 }
             }
+            }
             // login suspect from single-open provider: provider handles
             // recovery. consumer does nothing in this case.
+        }
+        
+		// get login reissue time from authenticationTTReissue
+        if (responseMsg.msgClass() == MsgClasses.REFRESH &&
+        	loginHandler.refreshInfo().checkHasAuthenticationTTReissue())
+        {
+			chnl.loginReissueTime = loginHandler.refreshInfo().authenticationTTReissue() * 1000;
+			chnl.canSendLoginReissue = true;
         }
     }
 
@@ -1314,6 +1352,9 @@ public class Consumer implements ResponseCallback
         CommandLine.addOption("krbfile", "", "KRB File location and name");
         CommandLine.addOption("keyfile", "", "Keystore file location and name");
         CommandLine.addOption("keypasswd", "", "Keystore password");        
+        CommandLine.addOption("at", "", "Specifies the Authentication Token. If this is present, the login user name type will be Login.UserIdTypes.AUTHN_TOKEN.");
+        CommandLine.addOption("ax", "", "Specifies the Authentication Extended information.");
+        CommandLine.addOption("aid", "", "Specifies the Application ID.");
     }
 
     public static void main(String[] args) throws Exception

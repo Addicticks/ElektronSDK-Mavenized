@@ -54,7 +54,7 @@ import com.thomsonreuters.upa.valueadd.domainrep.rdm.directory.Service;
 import com.thomsonreuters.upa.valueadd.domainrep.rdm.directory.Service.ServiceGroup;
 import com.thomsonreuters.upa.valueadd.reactor.WlRequest.State;
 
-public class WlItemHandler implements WlHandler
+class WlItemHandler implements WlHandler
 {
     // non private stream copy flags
     int defaultCopyFlags = CopyMsgFlags.ALL_FLAGS & ~CopyMsgFlags.EXTENDED_HEADER & ~CopyMsgFlags.DATA_BODY;
@@ -1833,6 +1833,7 @@ public class WlItemHandler implements WlHandler
                         	wlItemGroup.groupId(groupId);
                         	wlItemGroup.wlService(wlStream.wlService());
                             wlStream.wlService().itemGroupTablePut(groupId, wlItemGroup);
+							wlStream.groupId(groupId);
                         	wlItemGroup.openStreamList().add(wlStream);
                         	WlInteger wlInteger = ReactorFactory.createWlInteger();
                             wlInteger.value(wlStream.streamId());
@@ -1845,9 +1846,13 @@ public class WlItemHandler implements WlHandler
                             _tempWlInteger.value(wlStream.streamId());
                             if (!wlItemGroup.streamIdToItemGroupTable().containsKey(_tempWlInteger))
                             {
-                        		wlItemGroup.openStreamList().add(wlStream);
-                        		WlInteger wlInteger = ReactorFactory.createWlInteger();
+								wlStream.groupId(wlItemGroup.groupId());
+
+								wlItemGroup.openStreamList().add(wlStream);
+
+								WlInteger wlInteger = ReactorFactory.createWlInteger();
                                 wlInteger.value(wlStream.streamId());
+								wlStream.groupTableKey(wlInteger);
                         		wlItemGroup.streamIdToItemGroupTable().put(wlInteger, wlStream);
                             }
                         }
@@ -2214,7 +2219,7 @@ public class WlItemHandler implements WlHandler
 	        _statusMsg.clear();
 	        _statusMsg.applyHasState();
 	        _statusMsg.msgClass(MsgClasses.STATUS);
-	        _statusMsg.state().text().data("channel down.");
+	        _statusMsg.state().text().data("Login stream was closed.");
 	        handleClose(_statusMsg); 
     	}
 

@@ -3253,7 +3253,7 @@ public class Module_4_ProvideDictionary
                     /* get StreamId */
                     fieldDictionaryRequestInfo_StreamId = msg.streamId();
 
-                    if (fieldDictionaryRequestInfo_MsgKey.copy(requestKey) == CodecReturnCodes.FAILURE)
+                    if (requestKey.copy(fieldDictionaryRequestInfo_MsgKey) == CodecReturnCodes.FAILURE)
                     {
                         if (sendDictionaryRequestRejectStatusMsg(chnl, msg.streamId(), DictionaryRejectReason.MAX_DICTIONARY_REQUESTS_REACHED, maxSize) != CodecReturnCodes.SUCCESS)
                             return CodecReturnCodes.FAILURE;
@@ -3276,12 +3276,13 @@ public class Module_4_ProvideDictionary
                     /* get StreamId */
                     enumTypeDictionaryRequestInfo_StreamId = msg.streamId();
 
-                    if (enumTypeDictionaryRequestInfo_MsgKey.copy(requestKey) == CodecReturnCodes.FAILURE)
+                    if (requestKey.copy(enumTypeDictionaryRequestInfo_MsgKey) == CodecReturnCodes.FAILURE)
                     {
                         if (sendDictionaryRequestRejectStatusMsg(chnl, msg.streamId(), DictionaryRejectReason.MAX_DICTIONARY_REQUESTS_REACHED, maxSize) != CodecReturnCodes.SUCCESS)
                             return CodecReturnCodes.FAILURE;
                         break;
                     }
+                    enumTypeDictionaryRequestInfo_DictionaryName = enumTypeDictionaryRequestInfo_MsgKey.name().toString();
 
                     System.out.printf("\nReceived Dictionary Request for DictionaryName: %s\n", enumTypeDictionaryRequestInfo_DictionaryName);
 
@@ -3331,7 +3332,7 @@ public class Module_4_ProvideDictionary
         int retval;
         Error error = TransportFactory.createError();
         TransportBuffer msgBuf = null;
-        int MAX_ENUM_TYPE_DICTIONARY_MSG_SIZE = 128000;
+        int MAX_ENUM_TYPE_DICTIONARY_MSG_SIZE = 12800;
         int dictionaryFid = -32768; // MIN_FID
         Int tmpInt = CodecFactory.createInt();
         String stateText = null;
@@ -3473,10 +3474,10 @@ public class Module_4_ProvideDictionary
             switch (dictionaryType)
             {
                 case Dictionary.Types.FIELD_DEFINITIONS:
-                    stateText = "Field Dictionary Refresh (starting fid %d)" + dictionaryFid;
+                    stateText = "Field Dictionary Refresh (starting fid " + dictionaryFid + ")";
                     break;
                 case Dictionary.Types.ENUM_TABLES:
-                    stateText = "Enum Type Dictionary Refresh (starting fid %d)" + dictionaryFid;
+                    stateText = "Enum Type Dictionary Refresh (starting fid " + dictionaryFid + ")";
                     break;
                 default:
                     break;
@@ -3629,7 +3630,9 @@ public class Module_4_ProvideDictionary
                      * @see DataDictionary, RDMDictionaryVerbosityValues,
                      *      EncodeEnumTypeDictionary, DecodeEnumTypeDictionary
                      */
-                    retval = dictionary.encodeEnumTypeDictionary(encodeIter, (int)enumTypeDictionaryRequestInfo_MsgKey.filter(), error);
+                    tmpInt.value(dictionaryFid);                	
+                    retval = dictionary.encodeEnumTypeDictionaryAsMultiPart(encodeIter, tmpInt, (int)enumTypeDictionaryRequestInfo_MsgKey.filter(), error);
+                    dictionaryFid = (int)tmpInt.toLong();
 
                     if ((retval) != CodecReturnCodes.SUCCESS)
                     {
